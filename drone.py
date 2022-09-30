@@ -1,45 +1,81 @@
 from djitellopy import Tello
+import uuid
 import cv2
+import detectors
+import re
 
-def drone_info(drone):
-    print(f'Capture URL: {drone.get_udp_video_address()}')
+def drone_init(drone):
+    drone.connect()
+    drone.streamon()
+    drone.enable_mission_pads()
+    drone.set_mission_pad_detection_direction(0)
+    drone.takeoff()
+    drone.move_down(40)
+
+def drone_stop(drone):
+    drone.streamoff()
+    drone.land()
+    drone.disable_mission_pads()
+    drone.end()
+
+def find_qr(drone):
+    frame_read = drone.get_frame_read()
+    detector = cv2.QRCodeDetector()
+    frame = frame_read.frame
+    text, points, _ = detector.detectAndDecode(frame)
+    image_name = f'pic_{uuid.uuid4()}.png'
+    if text != "":
+        cv2.imwrite(image_name, frame)
+    print(f'[{image_name}] QR Code: {text}')
+
+def find_barcodes(drone):
+    frame_read = drone.get_frame_read()
+    frame = frame_read.frame
+    barcodes = detectors.barcode_scanner(frame)
+    image_name = f'pic_{uuid.uuid4()}.png'
+    if len(barcodes) != 0:
+        cv2.imwrite(image_name, frame)
+    print(f'[{image_name}] Barcodes: {barcodes}')
+    return barcodes
+
+barcode_regex = re.compile(r'CODE')
+
+def scan_updown(drone):
+    rows = [set([])]
+    anus = 0
+
+    # if all else fails, go with this
+    drone_init(drone)
+    while drone.get_height() < 210:
+        barcodes = []
+
+        #find_qr(drone)
+        barcodes = find_barcodes(drone)
+        # QR code found?
+        newest_row_idx = len(rows) - 1
+        for barcode in barcodes:
+            if barcode.type == "QRCODE":
+                rows[newest_row_idx].add(barcode.data.decode("utf-8"))
+                rows.append(set([]))
+
+        # Barcodes found?
+        newest_row_idx = len(rows) - 1
+        for barcode in barcodes:
+            if barcode_regex.search(barcode.type):
+                rows[newest_row_idx].add(barcode.data.decode("utf-8"))
+        drone.move_up(40)
+
+    print(f'Rows: {rows}')
+    drone_stop(drone)
 
 def drone_zone(drone):
     drone.connect()
     drone.streamon()
-    while True:
-        asdf = 42
+    frame_read = drone.get_frame_read()
+    cv2.imwrite("picture.png", frame_read.frame)
+    print("Wrote image.")
+    drone.end()
 
-def initiate_tello(drone):
-    tello.enable_mission_pads()
-    tello.set_mission_pad_detection_direction(2)  # forward detection only
-
-    tello.takeoff()
-
-    pad = tello.get_mission_pad_id()
-
-    print(pad)
-    # # detect and react to pads until we see pad #1
-    while pad != 2:
-        tello.move_forward(20)
-        pad = tello.get_mission_pad_id()
-        pad_dx = tello.get_mission_pad_distance_x()
-        pad_dy = tello.get_mission_pad_distance_y()
-        pad_dz = tello.get_mission_pad_distance_z()
-        print(f'Pad ID: {pad}. dX = {pad_dx} | dY = {pad_dy} | dZ = {pad_dz}')
-        if pad == 2:
-            tello.go_xyz_speed(pad_dx, pad_dy, pad_dz, 10)
-            print("Stopping now. I'm done.")
-            break
-
-
-    # graceful termination
-    tello.disable_mission_pads()
-    tello.land()
-    tello.end()
-
-tello = Tello("192.168.1.25")
-#tello.connect()
-
-#initiate_tello(tello)
-drone_zone(tello)
+def start_the_drone():
+    tello = Tello("192.168.1.25")
+    scan_updown(tello)

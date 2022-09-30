@@ -4,6 +4,10 @@ import time
 import imutils
 from pyzbar.pyzbar import decode
 
+def is_square(cnt):
+    _, _, width, height = cv2.boundingRect(cnt)
+    ratio = width / height
+    return ratio > 0.99 and ratio < 1.01
 
 def barcode_detector(image):
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
@@ -30,19 +34,33 @@ def barcode_detector(image):
 
     # find contours left in the image
     cnts, _ = cv2.findContours(closed.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-    c = sorted(cnts, key = cv2.contourArea, reverse = True)[0]
-    rect = cv2.minAreaRect(c)
-    box = np.int0(cv2.boxPoints(rect))
-    cv2.drawContours(image, [box], -1, (0, 255, 0), 3)
+    c = sorted(cnts, key = cv2.contourArea, reverse = True)
 
-    return box, image
+    boxes = []
+    for cnt in cnts:
+        if not is_square(cnt):
+            continue
+        rect = cv2.minAreaRect(cnt)
+        box = np.int0(cv2.boxPoints(rect))
+        #cv2.drawContours(image, [box], -1, (0, 255, 0), 3)
+        boxes.append(box)
+
+    return boxes, image
 
 def barcode_scanner(image):
+    barcodes = []
     for barcode in decode(image):
         (x, y, w, h) = barcode.rect
-        cv2.rectangle(img, (x, y), (x + w, y + h), (0, 0, 255), 2)
+        #cv2.rectangle(image, (x, y), (x + w, y + h), (0, 0, 255), 2)
         barcodeData = barcode.data.decode('utf-8')
         barcodeType = barcode.type
-        text = "{} ({})".format(barcodeData, barcodeType)
-        cv2.putText(img, text, (x, y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 2)
-        print("[INFO] Found {} barcode: {}".format(barcodeType, barcodeData))
+        #text = "{} ({})".format(barcodeData, barcodeType)
+        barcodes.append(barcode)
+        #cv2.putText(img, text, (x, y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 2)
+        #print("[INFO] Found {} barcode: {}".format(barcodeType, barcodeData))
+    return barcodes
+
+def qr_code_detector(image):
+    detector = cv2.QRCodeDetector()
+    qr_code = detector.detect(image)
+    print(f'QR Code: {qr_code}')
