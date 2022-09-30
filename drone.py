@@ -18,6 +18,11 @@ def drone_stop(drone):
     drone.disable_mission_pads()
     drone.end()
 
+def drone_testies():
+    tello = Tello("192.168.1.25")
+    drone_init(tello)
+    drone_stop(tello)
+
 def find_qr(drone):
     frame_read = drone.get_frame_read()
     detector = cv2.QRCodeDetector()
